@@ -1,0 +1,62 @@
+{
+  "id": "gb-0047",
+  "direction": "业务指标",
+  "title": "榫川设备有效产出核对册",
+  "slug": "oee-shifts",
+  "algorithm": "停机区间合并裁剪、OEE三因子与按班次透视",
+  "entities": "Shift / DowntimeEvent / ProductionCount / OeeRun / DeliverySchedule",
+  "scenario": "试制设备班次与重叠停机记录→可用率/性能/质量口径→班组复盘站内交付；不把简单平均当加权总OEE",
+  "visual": "机械刻度、深橄榄与黄铜",
+  "oracle": "重叠区间去重、跨班裁剪手算；性能超1显示警示不静默截断",
+  "frontend": 18251,
+  "backend": 19251,
+  "db_port": 17751,
+  "database": "MySQL8",
+  "batch": 2,
+  "label": "班次与停机底稿",
+  "policy_label": "班次核算口径",
+  "fields": {
+    "period": "日期",
+    "department": "设备",
+    "start": "班次开始分钟",
+    "end": "班次结束分钟",
+    "ideal_seconds": "理想秒/件",
+    "total": "总件数",
+    "good": "合格件数",
+    "downtime": "停机区间JSON"
+  },
+  "example": {
+    "period": "2026-11-17",
+    "department": "试制机A",
+    "start": 480,
+    "end": 1020,
+    "ideal_seconds": 25,
+    "total": 900,
+    "good": 872,
+    "downtime": [
+      [
+        540,
+        590
+      ],
+      [
+        570,
+        620
+      ],
+      [
+        990,
+        1060
+      ]
+    ]
+  },
+  "policy": {
+    "version": "OEE-v1",
+    "definition": "实际运行时间=班次分钟-合并裁剪停机；性能=理想产出时间/运行时间"
+  },
+  "colors": [
+    "0.92 0.035 99",
+    "0.25 0.045 115",
+    "0.56 0.105 85"
+  ],
+  "caption": "停机去重 · 三因子核对 · 逐班回看",
+  "unit": "OEE"
+}
