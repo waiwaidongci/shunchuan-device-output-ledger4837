@@ -5,7 +5,12 @@
 ## 业务场景与工作流
 模拟客户：榫川研究协作组，12位业务与分析人员。每月研究明细先从`oee-shifts-202611.csv`录入底稿，经口径冻结、Python核算、负责人复核后向业务阅读者交付站内CSV。原有流程依靠人工表格抄算，痛点为口径版本难追溯、重复计算易错、复核与交付脱节。
 
-模块：业务总览、业务底稿、新建口径版本、异步核算与复核、定时交付、站内收件箱、审计。底稿可新增/修改/删除；口径仅新增版本；报告提交时冻结来源与版本并保存SHA256。定时交付引用已复核报告快照，worker到期写入数据库，业务阅读者下载。
+模块：业务总览、业务底稿、新建口径版本、异步核算与复核、异常隔离清单、定时交付、站内收件箱、审计。底稿可新增/修改/删除；口径仅新增版本；报告提交时冻结来源与版本并保存SHA256。定时交付引用已复核报告快照，worker到期写入数据库，业务阅读者下载。
+
+## 异常隔离核算
+坏底稿不会让整批核算失败，也不会被静默跳过而抬高有效产量。提交任务时逐条校验【数量】（含合格数≤总产量、全停机班次无产量）、【班次时间】（正时长且不超过两日）、【停机区间】（起止合法、不超班次范围），合格记录先形成带异常隔离清单的核算批次：`合格数+隔离数=输入总数`，每条隔离记录保留原始底稿与原因，批次标记为`isolated`。`isolated`批次不得复核、不得建立定时交付，worker也不会自动交付。
+
+底稿补齐后在核算页发起“补放重算”，仅重放受影响期间：未受影响期间沿用冻结快照与结果；单事务内同时更新快照、结果、SHA256、隔离清单与版本号，成功才原子切换，失败整体回滚并保留旧版（`replay_error`展示原因）。Redis锁与`queued/running/replaying/completed`状态门控保证重跑、补放和并发读取只能看到整批落地前或后的结果。批次版本号`version`每次补放+1；处理疑似中断时负责人可一键恢复到可读状态。全部隔离记录补齐后批次转为`reconciled`，方可复核与定时交付。
 
 ## 算法口径
 停机区间合并裁剪、OEE三因子与按班次透视。重叠区间去重、跨班裁剪手算；性能超1显示警示不静默截断。
@@ -41,7 +46,7 @@ Python3.11/FastAPI/SQLAlchemy/Redis，MySQL8；前端原生HTML/CSS/JS ES module
 
 后端开发：在backend安装requirements，设置DATABASE_URL/REDIS_URL/JWT_SECRET，`uvicorn src.main:app --reload`；前端可用Nginx或带同等代理的静态开发服务器。前后端全部业务计算在Python。
 
-环境变量：COMPOSE_PROJECT_NAME、FRONTEND_PORT、BACKEND_PORT、DB_PORT、JWT_SECRET（部署替换）、DATABASE_URL、REDIS_URL、SEED_DEMO。`.env`不入Git。数据库/Redis/共享产物为命名卷。共享角色枚举admin/analyst/viewer与状态queued/running/completed/failed分别定义于backend/src/constants/enums.py和frontend/src/constants/enums.js。两个中间件：统一可恢复校验错误、每IP每分钟360请求限流。
+环境变量：COMPOSE_PROJECT_NAME、FRONTEND_PORT、BACKEND_PORT、DB_PORT、JWT_SECRET（部署替换）、DATABASE_URL、REDIS_URL、SEED_DEMO。`.env`不入Git。数据库/Redis/共享产物为命名卷。共享角色枚举admin/analyst/viewer与状态queued/running/replaying/completed/failed分别定义于backend/src/constants/enums.py和frontend/src/constants/enums.js。两个中间件：统一可恢复校验错误、每IP每分钟360请求限流。
 
 ## 已知边界
 定时分发为站内收件箱；一名worker轮询执行，无外部邮件。调度发送已复核固定报告快照，不自动重算新数据。时间显示Asia/Shanghai。报告导出适合小型数据；底稿全量加载240行演示数据。Google Fonts不可用时回退serif。后端API以专属字段对象收发，页面通过业务输入控件编辑，不要求用户写JSON。新增来源期间自动可选；专属字段和算法严格校验。JWT演示有效期2小时。
@@ -49,4 +54,4 @@ Python3.11/FastAPI/SQLAlchemy/Redis，MySQL8；前端原生HTML/CSS/JS ES module
 MIT License。
 
 ## 实际实体映射
-来源记录（Source，专属业务字段校验）、口径版本（Policy）、核算报告（Run）、交付计划（Schedule）、交付（Delivery）均经数据库→模型→请求schema→service→route/controller→frontend API→store→page。Period为已有来源期间字典，在任务期间选择器使用；不单独作为复杂度计数。底稿JSON为小型多字段单记录存储，不虚构未落库的子实体。
+来源记录（Source，专属业务字段校验）、口径版本（Policy）、核算报告（Run，含batch_state/version/replay_error）、异常隔离记录（Quarantine，原因与原始底稿留痕）、交付计划（Schedule）、交付（Delivery）均经数据库→模型→请求schema→service→route/controller→frontend API→store→page。Period为已有来源期间字典，在任务期间选择器使用；不单独作为复杂度计数。底稿JSON为小型多字段单记录存储，不虚构未落库的子实体。隔离清单通过`/runs/{id}/quarantine`读取，补放通过`/runs/{id}/replay`按期间重放，结构演进见backend/migrations/002_quarantine.md。

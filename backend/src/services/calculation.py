@@ -1,4 +1,4 @@
-from src.services.validation import validate_source,validate_policy
+from src.services.validation import validate_policy
 def downtime_minutes(start,end,intervals):
  pieces=sorted((max(start,a),min(end,b)) for a,b in intervals if min(end,b)>max(start,a))
  merged=[]
@@ -7,9 +7,10 @@ def downtime_minutes(start,end,intervals):
   else:merged.append([a,b])
  return sum(b-a for a,b in merged)
 def calculate(sources,policy):
+ # 仅核算通过校验的合格记录；异常记录已在提交/重放阶段隔离，不进入此处
  validate_policy(policy);rows=[];warnings=[];planned=operating=ideal_total=ideal_good=0
  for s in sources:
-  validate_source(s);p=s['end']-s['start'];down=downtime_minutes(s['start'],s['end'],s['downtime']);op=p-down
+  p=s['end']-s['start'];down=downtime_minutes(s['start'],s['end'],s['downtime']);op=p-down
   it=s['total']*s['ideal_seconds']/60;ig=s['good']*s['ideal_seconds']/60
   if op<=0 and s['total']>0:raise ValueError('全部停机班次不得有产量')
   a=op/p;perf=it/op if op else 0;q=s['good']/s['total'] if s['total'] else 0

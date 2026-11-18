@@ -1,1 +1,1 @@
-export const ROLES=['admin','analyst','viewer'];export const STATUSES={queued:'排队中',running:'计算中',completed:'已完成',failed:'失败'};
+export const ROLES=['admin','analyst','viewer'];export const STATUSES={queued:'排队中',running:'计算中',replaying:'补放重算中',completed:'已完成',failed:'失败'};export const BATCH={reconciled:'已核对',isolated:'待补齐隔离'};

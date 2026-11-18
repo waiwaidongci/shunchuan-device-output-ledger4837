@@ -1,15 +1,16 @@
 import os,logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from src.config.database import Base,engine
+from src.config.database import engine
 from src.config.settings import CONFIG,REDIS_URL
 from src.models import identity,source,run
 from src.routes import auth,source as source_routes,reports,deliveries,audits
 from src.middlewares.errors import Errors
 from src.middlewares.rate import RateLimit
+from src.config.schema import upgrade_schema
 @asynccontextmanager
 async def lifespan(app):
- Base.metadata.create_all(engine)
+ upgrade_schema()
  if os.getenv('SEED_DEMO')=='true':
   try:
    from scripts.seed_demo import seed
